@@ -2244,7 +2244,7 @@ rtl8xxxu_init_mac(struct rtl8xxxu_priv *priv)
 	}
 
 	if (priv->rtl_chip != RTL8723B && priv->rtl_chip != RTL8192E)
-		rtl8xxxu_write8(priv, REG_MAX_AGGR_NUM, 0x0a);
+		rtl8xxxu_write16(priv, REG_MAX_AGGR_NUM, 0x0708);	// rtl92c_init_ampdu_aggregation
 
 	return 0;
 }
@@ -4123,6 +4123,13 @@ static int rtl8xxxu_init_device(struct ieee80211_hw *hw)
 	 * Configure initial WMAC settings
 	 */
 	val32 = RCR_ACCEPT_PHYS_MATCH | RCR_ACCEPT_MCAST | RCR_ACCEPT_BCAST |
+#if 0
+		RCR_ACCEPT_DATA_FRAME | RCR_APPEND_FCS |
+		RCR_ACCEPT_CRC32 |
+#else
+		RCR_FORCE_ACK |		// check RCR_ACCEPT_DATA_FRAME
+		RCR_ACCEPT_CTRL_FRAME |
+#endif	// cause the connection down
 		RCR_ACCEPT_MGMT_FRAME | RCR_HTC_LOC_CTRL |
 		RCR_APPEND_PHYSTAT | RCR_APPEND_ICV | RCR_APPEND_MIC;
 	rtl8xxxu_write32(priv, REG_RCR, val32);
@@ -4140,28 +4147,54 @@ static int rtl8xxxu_init_device(struct ieee80211_hw *hw)
 	val32 &= ~RESPONSE_RATE_BITMAP_ALL;
 	val32 |= RESPONSE_RATE_RRSR_CCK_ONLY_1M;
 	rtl8xxxu_write32(priv, REG_RESPONSE_RATE_SET, val32);
+printk("adaptive control writing RRSR with %08x\n", val32);
+// init adaptive control	rtlwifi/rtl8192cu/hw.c +845
 
 	/* CCK = 0x0a, OFDM = 0x10 */
 	rtl8xxxu_set_spec_sifs(priv, 0x10, 0x10);
 	rtl8xxxu_set_retry(priv, 0x30, 0x30);
-	rtl8xxxu_set_spec_sifs(priv, 0x0a, 0x10);
+	//rtl8xxxu_set_spec_sifs(priv, 0x0a, 0x10);
 
 	/*
 	 * Init EDCA
 	 */
-	rtl8xxxu_write16(priv, REG_MAC_SPEC_SIFS, 0x100a);
+#if 1
+	val16 = rtl8xxxu_read16(priv, REG_RD_CTRL);
+        val16 |= BIT(11);	//DIS_EDCA_CNT_DWN;
+        rtl8xxxu_write16(priv, REG_RD_CTRL, val16);
+#endif
+	//rtl8xxxu_write16(priv, REG_MAC_SPEC_SIFS, 0x100a);
 
 	/* Set CCK SIFS */
-	rtl8xxxu_write16(priv, REG_SIFS_CCK, 0x100a);
+	//rtl8xxxu_write16(priv, REG_SIFS_CCK, 0x100a);
+	rtl8xxxu_write16(priv, REG_SIFS_CCK, 0x0a0a);
 
 	/* Set OFDM SIFS */
-	rtl8xxxu_write16(priv, REG_SIFS_OFDM, 0x100a);
+	//rtl8xxxu_write16(priv, REG_SIFS_OFDM, 0x100a);
+	rtl8xxxu_write16(priv, REG_SIFS_OFDM, 0x0e0e);
+
+	rtl8xxxu_write16(priv, REG_SIFS_CCK, 0x0a0a);
+	rtl8xxxu_write16(priv, REG_SIFS_OFDM, 0x1010);
+
+#if 1
+	rtl8xxxu_write16(priv, REG_PROT_MODE_CTRL, 0x0204);
+	rtl8xxxu_write32(priv, REG_BAR_MODE_CTRL, 0x014004);
+#endif
 
 	/* TXOP */
 	rtl8xxxu_write32(priv, REG_EDCA_BE_PARAM, 0x005ea42b);
 	rtl8xxxu_write32(priv, REG_EDCA_BK_PARAM, 0x0000a44f);
 	rtl8xxxu_write32(priv, REG_EDCA_VI_PARAM, 0x005ea324);
 	rtl8xxxu_write32(priv, REG_EDCA_VO_PARAM, 0x002fa226);
+
+#if 1
+	rtl8xxxu_write8(priv, REG_PIFS, 0x1c);
+
+	rtl8xxxu_write8(priv, REG_AGGR_BREAK_TIME, 0x16);
+	rtl8xxxu_write16(priv, REG_NAV_PROT_LEN, 0x0040);
+	rtl8xxxu_write8(priv, REG_BEACON_DMA_TIME, 0x02);
+	rtl8xxxu_write8(priv, REG_ATIMWND, 0x02);
+#endif
 
 	/* Set data auto rate fallback retry count */
 	rtl8xxxu_write32(priv, REG_DARFRC, 0x00000000);
@@ -4175,6 +4208,9 @@ static int rtl8xxxu_init_device(struct ieee80211_hw *hw)
 
 	/*  Set ACK timeout */
 	rtl8xxxu_write8(priv, REG_ACKTO, 0x40);
+
+	/* Set BW mode (20MHz) */
+	// same as rtl8xxxu_gen1_config_channel
 
 	/*
 	 * Initialize beacon parameters
@@ -4249,7 +4285,8 @@ static int rtl8xxxu_init_device(struct ieee80211_hw *hw)
 	rtl8xxxu_write8(priv, REG_HWSEQ_CTRL, 0xff);
 
 	/* Disable BAR - not sure if this has any effect on USB */
-	rtl8xxxu_write32(priv, REG_BAR_MODE_CTRL, 0x0201ffff);
+// Do not disable BAR
+//	rtl8xxxu_write32(priv, REG_BAR_MODE_CTRL, 0x0201ffff);
 
 	rtl8xxxu_write16(priv, REG_FAST_EDCA_CTRL, 0);
 
@@ -4558,10 +4595,16 @@ static void rtl8xxxu_set_basic_rates(struct rtl8xxxu_priv *priv, u32 rate_cfg)
 	val32 = rtl8xxxu_read32(priv, REG_RESPONSE_RATE_SET);
 	val32 &= ~RESPONSE_RATE_BITMAP_ALL;
 	val32 |= rate_cfg;
-	val32 = rate_cfg = RESPONSE_RATE_RRSR_CCK_ONLY_1M;
-	rtl8xxxu_write32(priv, REG_RESPONSE_RATE_SET, val32);
+	//rtl8xxxu_write32(priv, REG_RESPONSE_RATE_SET, val32);
+	//val32 = rate_cfg = RESPONSE_RATE_RRSR_CCK_ONLY_1M;	// responds to 6M, 19.5M
+	//val32 = rate_cfg = 0xff01;	// to 26M, 19.5M, 13M
+	//val32 = rate_cfg = 0x101;	// to 6, 6.5, 13, 19.5M bak, 24M malformed 
+	val32 = rate_cfg = 0xff1;	// 
+	rtl8xxxu_write8(priv, REG_RESPONSE_RATE_SET, val32 & 0xff);
+	rtl8xxxu_write8(priv, REG_RESPONSE_RATE_SET + 1, (val32 >> 8) & 0xff);
+printk("basic rate writing RRSR with %08x\n", val32);
 
-	dev_dbg(&priv->udev->dev, "%s: rates %08x\n", __func__,	rate_cfg);
+	dev_err(&priv->udev->dev, "%s: rates %08x:%08x\n", __func__, rate_cfg, val32);
 
 	while (rate_cfg) {
 		rate_cfg = (rate_cfg >> 1);
@@ -4792,7 +4835,10 @@ rtl8xxxu_bss_info_changed(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 			val32 |= RSR_ACK_SHORT_PREAMBLE;
 		else
 			val32 &= ~RSR_ACK_SHORT_PREAMBLE;
-		rtl8xxxu_write32(priv, REG_RESPONSE_RATE_SET, val32);
+		//rtl8xxxu_write32(priv, REG_RESPONSE_RATE_SET, val32);
+		val8 = 0x80;
+		rtl8xxxu_write8(priv, REG_RESPONSE_RATE_SET + 2, val8);
+printk("BSS_CHANGED_ERP_PREAMBLE change RRSR with %08x\n", val32);
 	}
 
 	if (changed & BSS_CHANGED_ERP_SLOT) {
@@ -6159,7 +6205,7 @@ static void rtl8xxxu_configure_filter(struct ieee80211_hw *hw,
 	struct rtl8xxxu_priv *priv = hw->priv;
 	u32 rcr = rtl8xxxu_read32(priv, REG_RCR);
 
-	dev_dbg(&priv->udev->dev, "%s: changed_flags %08x, total_flags %08x\n",
+	dev_err(&priv->udev->dev, "%s: changed_flags %08x, total_flags %08x\n",
 		__func__, changed_flags, *total_flags);
 
 	/*
@@ -6186,10 +6232,10 @@ static void rtl8xxxu_configure_filter(struct ieee80211_hw *hw,
 		rcr &= ~RCR_ACCEPT_CTRL_FRAME;
 
 	if (*total_flags & FIF_OTHER_BSS) {
-		rcr |= RCR_ACCEPT_AP;
+		//rcr |= RCR_ACCEPT_AP;
 		rcr &= ~RCR_CHECK_BSSID_MATCH;
 	} else {
-		rcr &= ~RCR_ACCEPT_AP;
+		//rcr &= ~RCR_ACCEPT_AP;
 		rcr |= RCR_CHECK_BSSID_MATCH;
 	}
 
@@ -6202,7 +6248,7 @@ static void rtl8xxxu_configure_filter(struct ieee80211_hw *hw,
 	 * FIF_PROBE_REQ ignored as probe requests always seem to be accepted
 	 */
 
-	rtl8xxxu_write32(priv, REG_RCR, rcr);
+//	rtl8xxxu_write32(priv, REG_RCR, rcr);	// don't override rcr
 
 	*total_flags &= (FIF_ALLMULTI | FIF_FCSFAIL | FIF_BCN_PRBRESP_PROMISC |
 			 FIF_CONTROL | FIF_OTHER_BSS | FIF_PSPOLL |
@@ -6890,6 +6936,7 @@ static int rtl8xxxu_probe(struct usb_interface *interface,
 	 * The firmware handles rate control
 	 */
 	ieee80211_hw_set(hw, AMPDU_AGGREGATION);
+	ieee80211_hw_set(hw, SUPPORTS_AMSDU_IN_AMPDU);
 
 	wiphy_ext_feature_set(hw->wiphy, NL80211_EXT_FEATURE_CQM_RSSI_LIST);
 
