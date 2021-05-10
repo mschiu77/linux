@@ -4403,6 +4403,9 @@ void rtl8xxxu_update_rate_mask(struct rtl8xxxu_priv *priv,
 
 	memset(&h2c, 0, sizeof(struct h2c_cmd));
 
+	ramask = 0xfff;
+	//ramask = 0xffff;	// ref UpdateHalRAMask8192CUsb, only invoked in mlmeext_sta_add_event_callback and mlmeext_joinbss_event_callback (set_sta_rate)
+	// arg = 0xa0 and mask is always fffff
 	h2c.ramask.cmd = H2C_SET_RATE_MASK;
 	h2c.ramask.mask_lo = cpu_to_le16(ramask & 0xffff);
 	h2c.ramask.mask_hi = cpu_to_le16(ramask >> 16);
@@ -4411,7 +4414,7 @@ void rtl8xxxu_update_rate_mask(struct rtl8xxxu_priv *priv,
 	if (sgi)
 		h2c.ramask.arg |= 0x20;
 
-	dev_dbg(&priv->udev->dev, "%s: rate mask %08x, arg %02x, size %zi\n",
+	dev_warn(&priv->udev->dev, "%s: rate mask %08x, arg %02x, size %zi\n",
 		__func__, ramask, h2c.ramask.arg, sizeof(h2c.ramask));
 	rtl8xxxu_gen1_h2c_cmd(priv, &h2c, sizeof(h2c.ramask));
 }
@@ -4437,7 +4440,7 @@ void rtl8xxxu_gen2_update_rate_mask(struct rtl8xxxu_priv *priv,
 
 	h2c.b_macid_cfg.data2 = bw;
 
-	dev_dbg(&priv->udev->dev, "%s: rate mask %08x, arg %02x, size %zi\n",
+	dev_warn(&priv->udev->dev, "%s: rate mask %08x, arg %02x, size %zi\n",
 		__func__, ramask, h2c.ramask.arg, sizeof(h2c.b_macid_cfg));
 	rtl8xxxu_gen2_h2c_cmd(priv, &h2c, sizeof(h2c.b_macid_cfg));
 }
@@ -5032,21 +5035,34 @@ rtl8xxxu_fill_txdesc_v1(struct ieee80211_hw *hw, struct ieee80211_hdr *hdr,
 	u16 seq_number;
 
 	if (rate_flags & IEEE80211_TX_RC_MCS &&
-	    !ieee80211_is_mgmt(hdr->frame_control))
+	    !ieee80211_is_mgmt(hdr->frame_control)) {
 		rate = tx_info->control.rates[0].idx + DESC_RATE_MCS0;
-	else
+printk("%s tx_info rate %d\n", __func__, rate);
+	}
+	else {
 		rate = tx_rate->hw_value;
+printk("%s tx_rate rate %d\n", __func__, rate);
+	}
 
-	if (rtl8xxxu_debug & RTL8XXXU_DEBUG_TX)
-		dev_info(dev, "%s: TX rate: %d, pkt size %u\n",
+	//if (rtl8xxxu_debug & RTL8XXXU_DEBUG_TX)
+	if (1)
+		dev_warn(dev, "%s: TX rate: %d, pkt size %u\n",
 			 __func__, rate, le16_to_cpu(tx_desc->pkt_size));
 
 	seq_number = IEEE80211_SEQ_TO_SN(le16_to_cpu(hdr->seq_ctrl));
 
+#if 0
 	tx_desc->txdw5 = cpu_to_le32(rate);
 
 	if (ieee80211_is_data(hdr->frame_control))
 		tx_desc->txdw5 |= cpu_to_le32(0x0001ff00);
+#else
+	// ref update_txdesc in vendor (16 - 19) is for pattrib raid
+	if (ieee80211_is_data(hdr->frame_control)) {
+		rate = 0;	// use ra mask
+		tx_desc->txdw1 &= 0xfff0ffff;	// refer rtl8192cu/trx.h +233 16-19 bit
+	}
+#endif
 
 	tx_desc->txdw3 = cpu_to_le32((u32)seq_number << TXDESC32_SEQ_SHIFT);
 
@@ -5056,6 +5072,8 @@ rtl8xxxu_fill_txdesc_v1(struct ieee80211_hw *hw, struct ieee80211_hdr *hdr,
 	}
 	else
 		tx_desc->txdw1 |= cpu_to_le32(TXDESC32_AGG_BREAK);
+
+printk("%s txdw1 %#08x\n", __func__, tx_desc->txdw1);
 
 	if (ieee80211_is_mgmt(hdr->frame_control)) {
 		tx_desc->txdw5 = cpu_to_le32(rate);
