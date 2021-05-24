@@ -2123,6 +2123,9 @@ static void rtl92cu_update_hal_rate_mask(struct ieee80211_hw *hw,
 
 	RT_TRACE(rtlpriv, COMP_RATR, DBG_DMESG,
 		 "ratr_bitmap :%x\n", ratr_bitmap);
+//ratr_bitmap &= 0xfff;	// tx rate 5.5M(b)
+//ratr_bitmap &= 0xffff;	// tx rate MCS 3 (28.9)
+ratr_bitmap &= 0xfffff;	// 
 	*(u32 *)&rate_mask = (ratr_bitmap & 0x0fffffff) |
 				     (ratr_index << 28);
 	rate_mask[4] = macid | (shortgi ? 0x20 : 0x00) | 0x80;
