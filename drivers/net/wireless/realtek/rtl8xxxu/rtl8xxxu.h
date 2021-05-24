@@ -1003,8 +1003,8 @@ struct h2c_cmd {
 		struct {
 			u8 cmd;
 			__le16 mask_hi;
-			__le16 mask_lo;
 			u8 arg;
+			__le16 mask_lo;
 		} __packed ramask;
 		struct {
 			u8 cmd;
