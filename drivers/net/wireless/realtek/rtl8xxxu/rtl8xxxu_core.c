@@ -920,11 +920,13 @@ rtl8xxxu_gen1_h2c_cmd(struct rtl8xxxu_priv *priv, struct h2c_cmd *h2c, int len)
 	 * Need to swap as it's being swapped again by rtl8xxxu_write16/32()
 	 */
 	if (len > sizeof(u32)) {
+printk("%s Write raw ext %#04x\n", __func__, le16_to_cpu(h2c->raw.ext));
 		rtl8xxxu_write16(priv, mbox_ext_reg, le16_to_cpu(h2c->raw.ext));
 		if (rtl8xxxu_debug & RTL8XXXU_DEBUG_H2C)
 			dev_info(dev, "H2C_EXT %04x\n",
 				 le16_to_cpu(h2c->raw.ext));
 	}
+printk("%s Write raw data %#08x\n", __func__, le32_to_cpu(h2c->raw.data));
 	rtl8xxxu_write32(priv, mbox_reg, le32_to_cpu(h2c->raw.data));
 	if (rtl8xxxu_debug & RTL8XXXU_DEBUG_H2C)
 		dev_info(dev, "H2C %08x\n", le32_to_cpu(h2c->raw.data));
@@ -4403,8 +4405,10 @@ void rtl8xxxu_update_rate_mask(struct rtl8xxxu_priv *priv,
 
 	memset(&h2c, 0, sizeof(struct h2c_cmd));
 
-	ramask = 0xfff;
+	//ramask = 0xfff;	// max 6Mbps txrate
+	// 26 or 28.9Mbps
 	//ramask = 0xffff;	// ref UpdateHalRAMask8192CUsb, only invoked in mlmeext_sta_add_event_callback and mlmeext_joinbss_event_callback (set_sta_rate)
+
 	// arg = 0xa0 and mask is always fffff
 	h2c.ramask.cmd = H2C_SET_RATE_MASK;
 	h2c.ramask.mask_lo = cpu_to_le16(ramask & 0xffff);
@@ -4414,7 +4418,7 @@ void rtl8xxxu_update_rate_mask(struct rtl8xxxu_priv *priv,
 	if (sgi)
 		h2c.ramask.arg |= 0x20;
 
-	dev_warn(&priv->udev->dev, "%s: rate mask %08x, arg %02x, size %zi\n",
+	dev_dbg(&priv->udev->dev, "%s: rate mask %08x, arg %02x, size %zi\n",
 		__func__, ramask, h2c.ramask.arg, sizeof(h2c.ramask));
 	rtl8xxxu_gen1_h2c_cmd(priv, &h2c, sizeof(h2c.ramask));
 }
@@ -4440,7 +4444,7 @@ void rtl8xxxu_gen2_update_rate_mask(struct rtl8xxxu_priv *priv,
 
 	h2c.b_macid_cfg.data2 = bw;
 
-	dev_warn(&priv->udev->dev, "%s: rate mask %08x, arg %02x, size %zi\n",
+	dev_dbg(&priv->udev->dev, "%s: rate mask %08x, arg %02x, size %zi\n",
 		__func__, ramask, h2c.ramask.arg, sizeof(h2c.b_macid_cfg));
 	rtl8xxxu_gen2_h2c_cmd(priv, &h2c, sizeof(h2c.b_macid_cfg));
 }
@@ -5044,9 +5048,8 @@ printk("%s tx_info rate %d\n", __func__, rate);
 printk("%s tx_rate rate %d\n", __func__, rate);
 	}
 
-	//if (rtl8xxxu_debug & RTL8XXXU_DEBUG_TX)
-	if (1)
-		dev_warn(dev, "%s: TX rate: %d, pkt size %u\n",
+	if (rtl8xxxu_debug & RTL8XXXU_DEBUG_TX)
+		dev_info(dev, "%s: TX rate: %d, pkt size %u\n",
 			 __func__, rate, le16_to_cpu(tx_desc->pkt_size));
 
 	seq_number = IEEE80211_SEQ_TO_SN(le16_to_cpu(hdr->seq_ctrl));
