@@ -1155,12 +1155,14 @@ ssize_t cs35l56_calibrate_debugfs_write(struct cs35l56_base *cs35l56_base,
 		if (num_amps == 0)
 			num_amps = -1;
 
+#if 0
 		ret = cs_amp_set_efi_calibration_data(cs35l56_base->dev,
 						      cs35l56_base->cal_index,
 						      num_amps,
 						      &cs35l56_base->cal_data);
 		if (ret < 0)
 			return ret;
+#endif	// mschiu77
 		break;
 	default:
 		return -EOPNOTSUPP;

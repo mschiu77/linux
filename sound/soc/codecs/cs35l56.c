@@ -898,7 +898,7 @@ err:
 
 static struct snd_soc_dapm_context *cs35l56_power_up_for_cal(struct cs35l56_private *cs35l56)
 {
-	struct snd_soc_dapm_context *dapm = snd_soc_component_to_dapm(cs35l56->component);
+	struct snd_soc_dapm_context *dapm = snd_soc_component_get_dapm(cs35l56->component);
 	int ret;
 
 	ret = snd_soc_dapm_enable_pin(dapm, "Calibrate");
@@ -912,7 +912,7 @@ static struct snd_soc_dapm_context *cs35l56_power_up_for_cal(struct cs35l56_priv
 
 static void cs35l56_power_down_after_cal(struct cs35l56_private *cs35l56)
 {
-	struct snd_soc_dapm_context *dapm = snd_soc_component_to_dapm(cs35l56->component);
+	struct snd_soc_dapm_context *dapm = snd_soc_component_get_dapm(cs35l56->component);
 
 	snd_soc_dapm_disable_pin(dapm, "Calibrate");
 	snd_soc_dapm_sync(dapm);
@@ -1221,7 +1221,7 @@ EXPORT_SYMBOL_IF_KUNIT(cs35l56_set_fw_name);
 
 static int cs35l56_component_probe(struct snd_soc_component *component)
 {
-	struct snd_soc_dapm_context *dapm = snd_soc_component_to_dapm(component);
+	struct snd_soc_dapm_context *dapm = snd_soc_component_get_dapm(component);
 	struct cs35l56_private *cs35l56 = snd_soc_component_get_drvdata(component);
 	struct dentry *debugfs_root = component->debugfs_root;
 	int ret;
@@ -1317,7 +1317,7 @@ static int cs35l56_set_bias_level(struct snd_soc_component *component,
 				  enum snd_soc_bias_level level)
 {
 	struct cs35l56_private *cs35l56 = snd_soc_component_get_drvdata(component);
-	struct snd_soc_dapm_context *dapm = snd_soc_component_to_dapm(component);
+	struct snd_soc_dapm_context *dapm = snd_soc_component_get_dapm(component);
 
 	switch (level) {
 	case SND_SOC_BIAS_STANDBY:
